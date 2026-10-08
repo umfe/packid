@@ -1,0 +1,50 @@
+name: Publish Package
+
+on:
+    workflow_dispatch:
+        inputs:
+            package_name:
+                description: NPM package name to publish
+                required: true
+                default: packid
+
+permissions:
+    contents: write
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  registry-url: 'https://registry.npmjs.org'
+
+            - name: Configure package name
+              id: config
+              run: |
+                  cd pack
+                  node -e "
+                    const fs = require('fs');
+                    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
+                    pkg.name = process.env.PKG_NAME;
+                    pkg.version = '0.0.1';
+                    fs.writeFileSync('package.json', JSON.stringify(pkg, null, '\t') + '\n');
+                    console.log('::set-output name=name::' + pkg.name);
+                  "
+              env:
+                  PKG_NAME: ${{ inputs.package_name }}
+
+            - name: Publish to NPM
+              run: |
+                  if [ -z "$NODE_AUTH_TOKEN" ]; then
+                    echo "::error::NODE_AUTH_TOKEN is empty. Please check that you have added NPM_TOKEN to your GitHub repository secrets."
+                    exit 1
+                  fi
+                  cd pack
+                  npm publish --access public
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
